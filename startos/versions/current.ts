@@ -1,7 +1,7 @@
 import { IMPOSSIBLE, VersionInfo } from '@start9labs/start-sdk'
 
 export const current = VersionInfo.of({
-  version: '0.6.0:2',
+  version: '0.6.1:0',
   releaseNotes: {
     en_US: 'Simple UI for running a Bitcoin ASIC miner as a space heater.',
   },
