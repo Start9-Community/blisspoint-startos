@@ -34,7 +34,11 @@ make universal          # -> blisspoint.s9pk
 start-cli s9pk inspect blisspoint.s9pk manifest
 ```
 
-CI delegates to the Start9 reusable workflows (`build`, `pr-retarget`,
-`tagAndRelease`, `release`, `syncNext`). Until this repo is transferred to the
-Start9-Community org, those workflows cannot publish — the Start9 side
-configures `DEV_KEY` and the registry/S3 secrets after transfer.
+CI builds and uploads test packages on pushes and pull requests using the
+Start9 reusable build workflow. Registry publishing workflows run only in the
+Start9-Community fork, where Start9 supplies signing and registry credentials.
+
+For submission, complete the real-device installation and end-to-end tests,
+then email the public repository URL to submissions@start9.com. Start9 forks
+the repository into their organization; ownership transfer is not required.
+See https://github.com/Start9-Community/.github/blob/main/profile/README.md.
