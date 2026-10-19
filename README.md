@@ -89,7 +89,7 @@ One interface, and one un-published outbound requirement that matters more than 
 
 Bound on the `ui-multi` MultiHost over HTTP and not masked.
 
-**There is no authentication.** Anyone who can reach the Web UI can control miners and read saved miner API passwords in plaintext through `GET /api/state`. Restrict this interface to trusted clients; encryption at rest does not protect the API.
+**There is no authentication.** Anyone who can reach the Web UI can control miners and reset the saved settings. Saved miner passwords are no longer exposed through the API: `GET /api/state` returns the placeholder `__stored__`, and the server applies the decrypted password itself when it forwards a `power`, `pause` or `resume` call to `proxy-rs`. State-changing requests from another origin are refused. Restrict this interface to trusted clients regardless.
 
 Two things are **not** exposed:
 

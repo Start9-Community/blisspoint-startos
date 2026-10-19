@@ -60,9 +60,11 @@ bottom switches between them.
 ## Limitations
 
 - **Only allow trusted people to reach Blisspoint.** There is no login. Anyone
-  who can reach the Web UI can control your miners and read their saved API
-  passwords. Restrict access to this interface using your StartOS network
-  settings; do not expose it to untrusted clients.
+  who can reach the Web UI can control your miners and reset the saved settings.
+  Saved miner passwords can no longer be read back through the interface: the
+  server keeps them and applies them to control commands itself. Restrict access
+  to this interface using your StartOS network settings; do not expose it to
+  untrusted clients.
 - **Your miner passwords are kept in your backups.** Any miner password you
   enter is saved on the server so it survives restarts. It is scrambled where it
   sits, but the key that unscrambles it is saved right beside it and both go
