@@ -65,7 +65,7 @@ One volume, holding everything the user has configured.
 
 Writes go to a temporary file and are then renamed, so an interrupted write cannot truncate the saved settings.
 
-String values in `state.json` are **encrypted at rest** as `enc:v1:<iv>:<tag>:<ciphertext>`. The key sits in the same volume, which means encryption protects the file on disk and **not** the backup — see [Backups and Restore](#backups-and-restore).
+`apiPassword` values in `state.json` are **encrypted at rest** as `enc:v1:<iv>:<tag>:<ciphertext>`; other settings remain plaintext. The key sits in the same volume, which means encryption protects the file on disk and **not** the backup — see [Backups and Restore](#backups-and-restore).
 
 The browser keeps a copy in `localStorage` as a cache and as a fallback when the server endpoint is unreachable, but the server copy is authoritative: on load the UI prefers `/data/state.json` and falls back to `localStorage` only if the request fails.
 
@@ -88,6 +88,8 @@ One interface, and one un-published outbound requirement that matters more than 
 | Web UI    | `ui` | ui   | 80   | The entire Blisspoint UI |
 
 Bound on the `ui-multi` MultiHost over HTTP and not masked.
+
+**There is no authentication.** Anyone who can reach the Web UI can control miners and read saved miner API passwords in plaintext through `GET /api/state`. Restrict this interface to trusted clients; encryption at rest does not protect the API.
 
 Two things are **not** exposed:
 
