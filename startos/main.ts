@@ -1,47 +1,50 @@
 import { i18n } from './i18n'
 import { sdk } from './sdk'
-import { uiPort } from './utils'
+import { proxyPort, uiPort } from './utils'
 
 export const main = sdk.setupMain(async ({ effects }) => {
-  /**
-   * ======================== Setup (optional) ========================
-   */
   console.info(i18n('Starting Blisspoint'))
 
-  const mounts = sdk.Mounts.of().mountVolume({
-    volumeId: 'main',
-    subpath: null,
-    mountpoint: '/data',
-    readonly: false,
-  })
-
-  const sub = sdk.SubContainer.of(
-    effects,
-    { imageId: 'blisspoint' },
-    mounts,
-    'blisspoint-sub',
-  )
-
-  /**
-   * ======================== Daemons ========================
-   *
-   * In this section, we create one or more daemons that define the service runtime.
-   *
-   * Each daemon defines its own health check, which can optionally be exposed to the user.
-   */
-  return sdk.Daemons.of(effects).addDaemon('primary', {
-    subcontainer: sub,
-    exec: {
-      command: ['sh', '-c', 'proxy-rs & node server/serve.cjs'],
-    },
-    ready: {
-      display: i18n('Web Interface'),
-      fn: () =>
-        sdk.healthCheck.checkPortListening(effects, uiPort, {
-          successMessage: i18n('The web interface is ready'),
-          errorMessage: i18n('The web interface is not ready'),
+  return sdk.Daemons.of(effects)
+    .addDaemon('proxy', {
+      subcontainer: sdk.SubContainer.of(
+        effects,
+        { imageId: 'blisspoint' },
+        null,
+        'proxy-sub',
+      ),
+      exec: { command: ['proxy-rs'] },
+      ready: {
+        display: null,
+        fn: () =>
+          sdk.healthCheck.checkPortListening(effects, proxyPort, {
+            successMessage: i18n('The miner proxy is ready'),
+            errorMessage: i18n('The miner proxy is not ready'),
+          }),
+      },
+      requires: [],
+    })
+    .addDaemon('primary', {
+      subcontainer: sdk.SubContainer.of(
+        effects,
+        { imageId: 'blisspoint' },
+        sdk.Mounts.of().mountVolume({
+          volumeId: 'main',
+          subpath: null,
+          mountpoint: '/data',
+          readonly: false,
         }),
-    },
-    requires: [],
-  })
+        'blisspoint-sub',
+      ),
+      exec: { command: ['node', 'server/serve.cjs'], cwd: '/app' },
+      ready: {
+        display: i18n('Web Interface'),
+        fn: () =>
+          sdk.healthCheck.checkPortListening(effects, uiPort, {
+            successMessage: i18n('The web interface is ready'),
+            errorMessage: i18n('The web interface is not ready'),
+          }),
+      },
+      requires: ['proxy'],
+    })
 })
