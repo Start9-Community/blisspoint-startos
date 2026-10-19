@@ -1,44 +1,168 @@
 <p align="center">
-  <img src="icon.png" alt="Blisspoint" width="20%">
+  <img src="icon.png" alt="Blisspoint Logo" width="21%" />
 </p>
 
 # Blisspoint on StartOS
 
-[Blisspoint](https://github.com/heatpunk/blisspoint) turns a Bitcoin ASIC miner
-into an ordinary household appliance: open it on your phone, see how much heat
-it is making, and slide the power up or down. This repository is the StartOS
-service package (SDK 3) that runs it on [StartOS](https://start9.com).
+> Everything not listed in this document should behave the same as upstream
+> Blisspoint. If a feature, setting, or behavior is not mentioned here, the
+> upstream documentation is accurate and fully applicable — see the
+> Documentation section of `instructions.md` for links.
 
-- **Upstream repo (the app):** <https://github.com/heatpunk/blisspoint>
-- **This repo:** StartOS packaging only. The app is consumed as the published,
-  multi-arch image pinned in `startos/manifest/index.ts`.
+[Blisspoint](https://github.com/heatpunk/blisspoint) is a deliberately simple UI for running a Bitcoin ASIC miner as a space heater: one slider for heat output, a live readout, and a pause button. It is built for the people you share a home with rather than for the person who set the miner up.
 
-## How it runs
+- **Upstream repo:** <https://github.com/heatpunk/blisspoint>
+- **Wrapper repo:** <https://github.com/Start9-Community/blisspoint-startos>
 
-| Property | Value |
-|---|---|
-| Image | `ghcr.io/heatpunk/blisspoint` (multi-arch: x86_64 + aarch64) |
-| Volume | `main` mounted at `/data` |
-| Runtime | `proxy-rs` (Rust, [asic-rs](https://github.com/256foundation/asic-rs)) on :8081 behind the Node server on :80 |
-| Interface | Web UI, HTTP, port 80 |
-| Backups | Volume `main` |
-| Network | The StartOS server must be on the same LAN as the miners (asic-rs speaks to them directly, e.g. port 4028) |
+---
 
-## Building and updating
+## Table of Contents
 
-See `UPDATING.md` (per-release checklist and image verification) and
-`AGENTS.md` (repo mechanics). Quick form:
+- [Image and Container Runtime](#image-and-container-runtime)
+- [Volume and Data Layout](#volume-and-data-layout)
+- [File Models](#file-models)
+- [Dependencies](#dependencies)
+- [Network Access and Interfaces](#network-access-and-interfaces)
+- [Installation and First-Run Flow](#installation-and-first-run-flow)
+- [Actions](#actions)
+- [Tasks](#tasks)
+- [Health Checks](#health-checks)
+- [Backups and Restore](#backups-and-restore)
+- [Limitations and Differences](#limitations-and-differences)
+- [Quick Reference for AI Consumers](#quick-reference-for-ai-consumers)
 
-```bash
-make universal          # -> blisspoint.s9pk
-start-cli s9pk inspect blisspoint.s9pk manifest
+---
+
+## Image and Container Runtime
+
+One image, published by upstream and consumed unmodified — pinned by digest as well as tag.
+
+| Property      | Value                             |
+| ------------- | --------------------------------- |
+| Image         | `ghcr.io/heatpunk/blisspoint`     |
+| Architectures | x86_64, aarch64                   |
+| Entrypoint    | Replaced — one daemon per process |
+
+| Subcontainer     | Daemon    | Runs                    |
+| ---------------- | --------- | ----------------------- |
+| `proxy-sub`      | `proxy`   | `proxy-rs`              |
+| `blisspoint-sub` | `primary` | `node server/serve.cjs` |
+
+The image's own command starts both processes from one shell, with `proxy-rs` in the background. The package runs them as two daemons instead, so StartOS supervises and restarts each one: `proxy-rs` does all miner communication on loopback port 8081, and the Node server on port 80 serves the UI and reverse-proxies `/api/*` to it. The Node server starts only once `proxy-rs` is listening.
+
+## Volume and Data Layout
+
+One volume, holding everything the user has configured.
+
+| Volume | Mount Point | Purpose                                          |
+| ------ | ----------- | ------------------------------------------------ |
+| `main` | `/data`     | The miner list, saved credentials, and the theme |
+
+| Path               | Written by      | Holds                                                      |
+| ------------------ | --------------- | ---------------------------------------------------------- |
+| `/data/state.json` | The Node server | Miners, names, captured power ceilings, passwords, theme   |
+| `/data/secret.key` | The Node server | The AES-256-GCM key, mode `0600`, generated on first write |
+
+Writes go to a temporary file and are then renamed, so an interrupted write cannot truncate the saved settings.
+
+`apiPassword` values in `state.json` are **encrypted at rest** as `enc:v1:<iv>:<tag>:<ciphertext>`; other settings remain plaintext. The key sits in the same volume, which means encryption protects the file on disk and **not** the backup — see [Backups and Restore](#backups-and-restore).
+
+The browser keeps a copy in `localStorage` as a cache and as a fallback when the server endpoint is unreachable, but the server copy is authoritative: on load the UI prefers `/data/state.json` and falls back to `localStorage` only if the request fails.
+
+## File Models
+
+None. The package defines no file models, sets no environment variables, and writes nothing to the volume itself.
+
+Every setting is the application's own, entered through its web interface and persisted by its Node server to `/data`. There is nothing on disk for StartOS to seed, merge, or repair, and nothing an action could correct — which is also why this package has no configuration action.
+
+## Dependencies
+
+None.
+
+## Network Access and Interfaces
+
+One interface, and one un-published outbound requirement that matters more than it does.
+
+| Interface | Id   | Type | Port | Description              |
+| --------- | ---- | ---- | ---- | ------------------------ |
+| Web UI    | `ui` | ui   | 80   | The entire Blisspoint UI |
+
+Bound on the `ui-multi` MultiHost over HTTP and not masked.
+
+**There is no authentication.** Anyone who can reach the Web UI can control miners and read saved miner API passwords in plaintext through `GET /api/state`. Restrict this interface to trusted clients; encryption at rest does not protect the API.
+
+Two things are **not** exposed:
+
+- **`proxy-rs` listens on loopback inside the container only.** The Node server proxies `/api/*` to it; nothing outside the container can reach it.
+- **The miner's own API is never exposed.** Blisspoint talks outbound to miners; it does not front them.
+
+**Outbound LAN access is the single network requirement.** The container must be able to reach the miners on the local network on their firmware's API port. Nothing about the StartOS interface controls affects that — a Blisspoint reachable from anywhere is still useless if it cannot reach the miners, which is the most common way this service appears broken while being perfectly healthy.
+
+## Installation and First-Run Flow
+
+There is no wizard, no generated credential, and no task. Once started, the web interface is immediately usable and opens on an empty miner list.
+
+The user adds a miner by IP address or runs a LAN scan from inside the UI. **The first successful connection captures that miner's own reported power target and freezes it as the ceiling** the slider will ever allow — which is the package's whole safety model, and is deliberately not raisable from Blisspoint. Changing it means raising the target in the miner's own interface, then removing and re-adding the miner here.
+
+## Actions
+
+None. The package ships an empty action set; everything is driven from the web interface.
+
+## Tasks
+
+None. This package raises no tasks, so the service is never held on a prompt and its ordinary controls are always available.
+
+## Health Checks
+
+One check is shown; the other only orders startup.
+
+| Check     | Displayed as    | Method                 | Grace Period |
+| --------- | --------------- | ---------------------- | ------------ |
+| `primary` | "Web Interface" | Port 80 is listening   | default      |
+| `proxy`   | not displayed   | Port 8081 is listening | default      |
+
+**The check says nothing about miners.** It confirms the UI server is accepting connections, and a Blisspoint with no miners configured — or with miners it cannot reach — is green. That is correct, and it is also why the health check is not the place to diagnose a miner problem; the UI is.
+
+## Backups and Restore
+
+The `main` volume is copied wholesale — `sdk.Backups.ofVolumes('main')`. That is `state.json` and `secret.key`.
+
+**A backup of this service is readable as miner API credentials.** The passwords in `state.json` are encrypted, but `secret.key` is in the same volume and therefore in the same backup, so anyone holding the backup holds both halves. Treat it accordingly.
+
+A restored install comes back with its miners already configured, including their captured power ceilings. Nothing else is stored: live readings are polled from the miners on each refresh and are never persisted.
+
+## Limitations and Differences
+
+1. **A backup exposes miner API passwords.** The key travels with the ciphertext.
+2. **Last write wins across devices.** Each browser saves the whole state object, so two people editing from different phones at once will have one overwrite the other. There is no merge and no conflict prompt.
+3. **The LAN scan sweeps a fixed set of `/24`s** — the first configured miner's, the container's own, and `192.168.1`, `192.168.0`, `10.0.0` unconditionally, with Docker's `172.16/12` excluded from the derived entries. Miners on any other subnet must be added by IP address.
+4. **Control support is narrower than monitoring support.** Reading live stats works across the firmwares `asic-rs` supports; setting a power target and pausing only work where the firmware exposes them.
+5. **No StartOS actions and no configuration surface.** Everything is in the web interface.
+6. **The power ceiling cannot be raised from Blisspoint** — by design.
+
+---
+
+## Quick Reference for AI Consumers
+
+```yaml
+package_id: blisspoint
+image: ghcr.io/heatpunk/blisspoint # pinned by digest as well as tag
+architectures:
+  - x86_64
+  - aarch64
+subcontainers:
+  - proxy-sub
+  - blisspoint-sub
+volumes:
+  main: /data # state.json and secret.key
+file_models: []
+startos_managed_env_vars: []
+dependencies: []
+interfaces:
+  ui: { type: ui, port: 80 }
+actions: []
+tasks: []
+health_checks:
+  - primary # displayed "Web Interface"
+  - proxy # not displayed
 ```
-
-CI builds and uploads test packages on pushes and pull requests using the
-Start9 reusable build workflow. Registry publishing workflows run only in the
-Start9-Community fork, where Start9 supplies signing and registry credentials.
-
-For submission, complete the real-device installation and end-to-end tests,
-then email the public repository URL to submissions@start9.com. Start9 forks
-the repository into their organization; ownership transfer is not required.
-See https://github.com/Start9-Community/.github/blob/main/profile/README.md.

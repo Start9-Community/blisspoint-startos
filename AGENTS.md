@@ -1,7 +1,7 @@
-# Blisspoint-StartOS
+# AGENTS.md
 
-This repository contains the StartOS SDK 3 `.s9pk` package for [Blisspoint](https://github.com/heatpunk/blisspoint).
+This is a StartOS service-package repository — it builds a `.s9pk` for StartOS.
 
-- The app lives in the upstream repo: https://github.com/heatpunk/blisspoint
-- The SDK 3 package is in this repo, separate from the app.
-- To update for a new release: bump `startos/versions/current.ts` version and release notes, bump `manifest/index.ts` dockerTag, then PR to master.
+Develop it inside a StartOS packaging workspace created by `start-cli s9pk init-workspace`,
+which provides the packaging guide and agent context one level up. If you're reading this in a
+bare clone with no workspace, the full guide is at <https://docs.start9.com/packaging>.

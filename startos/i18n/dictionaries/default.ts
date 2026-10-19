@@ -6,6 +6,8 @@ const dict = {
   'Web Interface': 1,
   'The web interface is ready': 2,
   'The web interface is not ready': 3,
+  'The miner proxy is ready': 6,
+  'The miner proxy is not ready': 7,
 
   // interfaces.ts
   'Web UI': 4,
