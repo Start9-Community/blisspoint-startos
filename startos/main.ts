@@ -36,7 +36,15 @@ export const main = sdk.setupMain(async ({ effects }) => {
         }),
         'blisspoint-sub',
       ),
-      exec: { command: ['node', 'server/serve.cjs'], cwd: '/app' },
+      exec: {
+        command: ['node', 'server/serve.cjs'],
+        cwd: '/app',
+        // The image's serve.cjs spawns and supervises proxy-rs itself when run
+        // as a plain Docker container (umbrel, raw image). StartOS runs
+        // proxy-rs as its own daemon above, so disable that here to avoid two
+        // proxies racing for :8081.
+        env: { PROXY_SPAWN: '0' },
+      },
       ready: {
         display: i18n('Web Interface'),
         fn: () =>
