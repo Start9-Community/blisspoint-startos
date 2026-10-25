@@ -48,7 +48,7 @@ One image, published by upstream and consumed unmodified — pinned by digest as
 | `proxy-sub`      | `proxy`   | `proxy-rs`              |
 | `blisspoint-sub` | `primary` | `node server/serve.cjs` |
 
-The image's own command starts both processes from one shell, with `proxy-rs` in the background. The package runs them as two daemons instead, so StartOS supervises and restarts each one: `proxy-rs` does all miner communication on loopback port 8081, and the Node server on port 80 serves the UI and reverse-proxies `/api/*` to it. The Node server starts only once `proxy-rs` is listening.
+The image's own command runs the Node server, which spawns and supervises `proxy-rs`. The package sets `PROXY_SPAWN=0` on the Node daemon to disable that supervision and runs the processes as two daemons instead, so StartOS supervises and restarts each one: `proxy-rs` does all miner communication on loopback port 8081, and the Node server on port 80 serves the UI and reverse-proxies `/api/*` to it. The Node server starts only once `proxy-rs` is listening.
 
 ## Volume and Data Layout
 
@@ -71,7 +71,7 @@ The browser keeps a copy in `localStorage` as a cache and as a fallback when the
 
 ## File Models
 
-None. The package defines no file models, sets no environment variables, and writes nothing to the volume itself.
+None. The package defines no file models and writes nothing to the volume itself. It sets `PROXY_SPAWN=0` on the Node daemon at every launch to leave proxy supervision to StartOS.
 
 Every setting is the application's own, entered through its web interface and persisted by its Node server to `/data`. There is nothing on disk for StartOS to seed, merge, or repair, and nothing an action could correct — which is also why this package has no configuration action.
 
@@ -156,7 +156,8 @@ subcontainers:
 volumes:
   main: /data # state.json and secret.key
 file_models: []
-startos_managed_env_vars: []
+startos_managed_env_vars:
+  - PROXY_SPAWN
 dependencies: []
 interfaces:
   ui: { type: ui, port: 80 }
