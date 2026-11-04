@@ -25,5 +25,3 @@ gh release view -R heatpunk/blisspoint --json tagName -q .tagName
 3. Check the image's `Cmd` (`--format '{{json .Image}}'`) still runs `proxy-rs` and
    `node server/serve.cjs` from `/app`; `startos/main.ts` runs them as separate daemons
    and must follow any change.
-4. Bump `startos/versions/current.ts` per `versions.md`, with release notes in every
-   locale.
